@@ -2,7 +2,7 @@
 
 一室光用于控制兼容的欧普灯具。你可以在手机或电脑浏览器里开关灯、调亮度和色温、保存常用灯光场景，以及设置倒计时关灯。
 
-![一室光控制页面](screenshots/apple-real/desktop.png)
+![一室光控制页面](screenshots/desktop.png)
 
 ## 开始使用
 
@@ -50,4 +50,4 @@
 - [问题反馈与源代码](https://github.com/sdrpsps/opple-light)
 - [开发与部署说明（uv）](docs/DEVELOPMENT.md)
 - [Home Assistant OPPLE 集成](https://www.home-assistant.io/integrations/opple/)
-- [许可证](LICENSE)
+- [许可证](LICENSE)与[第三方版权声明](THIRD_PARTY_NOTICES.txt)

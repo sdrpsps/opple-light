@@ -33,7 +33,7 @@ TEST_URL=http://127.0.0.1:8086 PLAYWRIGHT_CHANNEL=chrome node tests/auth-ui.cjs
 
 ## 单容器 Docker 部署
 
-原生 Linux / NAS 宿主机需要能够访问灯具局域网。默认 Compose 使用 host 网络，由服务直接收发灯具 UDP 55001，无转发脚本或辅助容器：
+原生 Linux / NAS 宿主机需要能够访问灯具局域网。项目只保留标准文件 `compose.yaml`。默认 Compose 使用 host 网络，由服务直接收发灯具 UDP 55001，无转发脚本或辅助容器：
 
 ```sh
 docker compose up -d --build
@@ -64,9 +64,7 @@ GitHub Actions 沿用现有发布工作流，通过 Dockerfile 使用 uv 和锁�
 | `app/` | API、认证、直接 UDP 驱动和静态网页 |
 | `config/` | 灯具配置 |
 | `tests/` | Python 与浏览器测试 |
-| `docs/` | 部署、Pocket ID 和历史验收说明 |
-| `screenshots/apple-real/` | README 展示所用的界面截图 |
+| `docs/` | 开发、部署与 Pocket ID 说明 |
+| `screenshots/` | 当前页面的桌面与手机截图 |
 
 `.env`、`data/`、`data-demo/`、`.venv/` 和 `test-artifacts/` 是本地配置或生成内容，均不进入 Git 与 Docker 构建上下文。清理代码不删除这些运行数据。Docker 数据卷保存状态、场景和倒计时；`docker compose down` 保留数据，需要保留数据时不要使用 `down -v`。
-
-历史硬件验证见 [验收记录](VALIDATION.md)。Pocket ID 真实登录状态与本地模拟测试的验证边界也记录在那里。
