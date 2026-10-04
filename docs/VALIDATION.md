@@ -2,7 +2,9 @@
 
 验证日期：2026-10-04，Asia/Shanghai。
 
-## 交付状态
+本文件按时间保留历史验收。早期 Mac 转发链路与双容器描述仅代表当时状态；当前使用 Linux 单容器直连，旧兼容代码已移除。
+
+## 初次交付状态（历史）
 
 - 完整源码、固定版本依赖、Dockerfile、真实服务与演示服务 Compose 配置已提供。
 - 真实服务运行于本机 8080，演示服务运行于本机 8086；两个 Docker 容器均为 healthy。
@@ -78,7 +80,7 @@ Linux/NAS 网络、其他型号或固件、多灯硬件、真实灯具的最低�
 
 ## 2026-10-04 Debian 单容器直连验收
 
-通过 termark 部署到内网 Debian 13 x86_64（192.168.111.27），安装 Debian 仓库 Docker 26.1.5 和 Compose 2.26.1。Docker Hub 超时，使用 Dockerfile.debian-test 的镜像加速地址构建。实际只运行一个 opple-light-light-1 容器，network_mode=host，未注入 UDP 转发地址，无宿主机转发进程。连续三次刷新均读取到灯具在线、power=false、brightness_percent=90、color_temperature_kelvin=5000。容器 healthy，Mac 访问网页 HTTP 200。未发送灯具状态写入，未改变原状态。JSON 证据保存在 debian-validation.json。本地应用 14 项测试通过。此前未实测 Linux 的记录描述的是此验收之前的状态。
+通过 termark 部署到内网 Debian 13 x86_64（192.168.111.27），安装 Debian 仓库 Docker 26.1.5 和 Compose 2.26.1。Docker Hub 超时，使用 Dockerfile.debian-test 的镜像加速地址构建。实际只运行一个 opple-light-light-1 容器，network_mode=host，未注入 UDP 转发地址，无宿主机转发进程。连续三次刷新均读取到灯具在线、power=false、brightness_percent=90、color_temperature_kelvin=5000。容器 healthy，Mac 访问网页 HTTP 200。未发送灯具状态写入，未改变原状态。JSON 证据保存在 [validation/debian.json](validation/debian.json)。本地应用 14 项测试通过。此前未实测 Linux 的记录描述的是此验收之前的状态。
 
 
 ## 2026-10-04 内网免口令访问
@@ -96,4 +98,12 @@ Linux/NAS 网络、其他型号或固件、多灯硬件、真实灯具的最低�
 
 实现 OIDC 授权码登录、PKCE S256、state/nonce、服务端随机会话和带 scope 的 OAuth API 验签；没有本地用户管理。31 项 Python 测试通过，使用隔离模拟身份服务及生成的 RSA 密钥，覆盖只读/控制权限、旧凭证拒绝、错误 issuer/audience/签名/期限、登录重放、退出与过期、公钥轮换、ID token 客户端及 access token 绑定。Chrome 演示界面测试通过 Pocket ID、旧口令和免登录三种模式，无 JavaScript 错误，无 API 写入。
 
-实际 Pocket ID 发现端点确认支持授权码、PKCE S256、RS256 和 client_credentials。尚未配置真实 OIDC Client ID/Secret，也未完成真实登录、API 权限授予或快捷指令联调。认证模式没有在 Debian 启用，原内网免口令服务保持原部署；本次未控制真实灯具。配置步骤见 docs/POCKET_ID.md。
+实际 Pocket ID 发现端点确认支持授权码、PKCE S256、RS256 和 client_credentials。尚未配置真实 OIDC Client ID/Secret，也未完成真实登录、API 权限授予或快捷指令联调。认证模式没有在 Debian 启用，原内网免口令服务保持原部署；本次未控制真实灯具。配置步骤见 [POCKET_ID.md](POCKET_ID.md)。
+
+## 2026-10-04 uv 管理与项目清理
+
+依赖迁移至 pyproject.toml 与 uv.lock，Python 3.12；既有 24 项运行依赖的版本全部保留。`uv lock --check`、`uv sync --locked` 成功。`uv run --locked pytest -q`：30 项通过；删除已废弃的转发签名测试，将原协议模拟测试改成 UDP 直连，仍覆盖数据包编码、加密、开关、亮度、色温和回读。
+
+统一 Dockerfile 使用 uv 0.12.19 构建，不安装开发依赖。Docker Hub 元数据请求未返回，使用 PYTHON_IMAGE 参数指定此前采用的 Python 镜像地址，arm64 镜像构建成功。隔离演示容器以 UID 10001、只读根文件系统和临时数据目录运行；健康检查、网页、会话、状态读取以及模拟关灯操作确认成功。运行环境不含 uv、gcc 或 pytest。Chrome 验证三种登录界面通过，无脚本错误。两个 Compose 配置校验通过。
+
+移除旧 Mac UDP 转发链路、重复 Dockerfile、requirements 文件和四张早期截图；保留当前界面截图及历史验收资料。测试容器已停止并自动移除，临时测试镜像已删除；未更新 Debian 或操作真实灯具。本次本地镜像为 arm64，amd64 构建仍由发布流水线验证。

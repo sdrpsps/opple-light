@@ -6,7 +6,7 @@ const fs=require('node:fs');
  const context=await browser.newContext(); const page=await context.newPage(); const errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  const base=process.env.TEST_URL||'http://127.0.0.1:8086';
- const out=process.env.TEST_ARTIFACTS||'screenshots/motion';fs.mkdirSync(out,{recursive:true});
+ const out=process.env.TEST_ARTIFACTS||'test-artifacts/motion';fs.mkdirSync(out,{recursive:true});
  await page.route('**/api/v1/**',route=>route.request().method()==='GET'?route.continue():route.abort());
  try{
   await page.goto(base); await page.locator('#power-button:not([disabled])').waitFor();

@@ -1,26 +1,12 @@
 import socket
 import threading
 from types import SimpleNamespace
-import pytest
 from pyoppleio import Message, const
 from app.driver import OppleDriver
-from app.relay_protocol import encode, decode
-from udp_relay import serve
 
 
-def test_relay_hmac_rejects_tampering():
-    token = "test-token-at-least-twenty-characters"
-    encoded = encode({"target":"127.0.0.1","port":55001}, token)
-    assert decode(encoded, token)["port"] == 55001
-    with pytest.raises(ValueError):
-        decode(encoded.replace(b"55001", b"55002"), token)
-    with pytest.raises(ValueError):
-        decode(encoded, "different-token")
-
-
-def test_real_protocol_reads_and_writes_through_authenticated_relay(monkeypatch):
+def test_real_protocol_reads_and_writes_over_direct_udp(monkeypatch):
     """Exercise actual OPPLE encryption and driver setters against a UDP lamp emulator."""
-    token = "test-token-at-least-twenty-characters"
     stop = threading.Event()
     lamp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     lamp_socket.bind(("127.0.0.1",0))
@@ -62,21 +48,12 @@ def test_real_protocol_reads_and_writes_through_authenticated_relay(monkeypatch)
                 elif kind == const.MESSAGE_TYPE["COLOR_TEMP"]: state["kelvin"] = value
                 continue
             response.set(int.from_bytes(request.get_request_sn(),"big"), const.MESSAGE_OFFSET["RES_SERIAL_NUM"], header=True)
-            # The driver only checks protocol serial, just as the physical device API.
+            # Match the request serial and send from the configured lamp address.
             encoded_port = int.from_bytes(raw[0x0C:0x10],"big")
             lamp_socket.sendto(response.data,(peer[0],encoded_port or peer[1]))
 
     lamp_thread = threading.Thread(target=emulator, daemon=True)
     lamp_thread.start()
-    relay_ready = threading.Event()
-    relay_ports = []
-    def ready(port):
-        relay_ports.append(port); relay_ready.set()
-    relay_thread = threading.Thread(target=serve,args=("127.0.0.1",0,token,{"127.0.0.1"},stop,ready),daemon=True)
-    relay_thread.start()
-    assert relay_ready.wait(2)
-    monkeypatch.setenv("OPPLE_UDP_RELAY",f"127.0.0.1:{relay_ports[0]}")
-    monkeypatch.setenv("OPPLE_RELAY_TOKEN",token)
     driver = OppleDriver("127.0.0.1")
     try:
         reading = driver.read()
@@ -87,4 +64,4 @@ def test_real_protocol_reads_and_writes_through_authenticated_relay(monkeypatch)
         assert const.MESSAGE_TYPE["COLOR_TEMP"] in commands
         assert const.MESSAGE_TYPE["BRIGHTNESS"] in commands
     finally:
-        driver.close(); stop.set(); relay_thread.join(2); lamp_thread.join(2); lamp_socket.close()
+        driver.close(); stop.set(); lamp_thread.join(2); lamp_socket.close()

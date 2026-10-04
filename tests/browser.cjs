@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
 const url = process.env.TEST_URL || 'http://127.0.0.1:8086';
-const artifacts = path.resolve(process.env.TEST_ARTIFACTS || 'screenshots');
+const artifacts = path.resolve(process.env.TEST_ARTIFACTS || 'test-artifacts/browser');
 
 (async () => {
   const session = await (await fetch(url + '/api/v1/session')).json();

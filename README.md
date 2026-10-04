@@ -48,5 +48,6 @@
 ## 项目信息
 
 - [问题反馈与源代码](https://github.com/sdrpsps/opple-light)
+- [开发与部署说明（uv）](docs/DEVELOPMENT.md)
 - [Home Assistant OPPLE 集成](https://www.home-assistant.io/integrations/opple/)
 - [许可证](LICENSE)

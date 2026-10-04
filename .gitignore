@@ -17,5 +17,5 @@ venv/
 *.db
 *.db-shm
 *.db-wal
-screenshots/motion/
-screenshots/test-backup.json
+test-artifacts/
+node_modules/

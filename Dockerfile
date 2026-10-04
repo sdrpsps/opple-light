@@ -1,13 +1,20 @@
-FROM python:3.12-slim AS builder
-WORKDIR /build
-RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+# Override PYTHON_IMAGE to use a reachable mirror without a second Dockerfile.
+ARG PYTHON_IMAGE=python:3.12-slim
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.12.19
+FROM ${UV_IMAGE} AS uv
 
-FROM python:3.12-slim
-ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 OPPLE_CONFIG=/config/config.yaml OPPLE_DATA=/data
+FROM ${PYTHON_IMAGE} AS builder
+COPY --from=uv /uv /usr/local/bin/uv
+WORKDIR /build
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml uv.lock .python-version ./
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev --no-install-project
+
+FROM ${PYTHON_IMAGE}
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 OPPLE_CONFIG=/config/config.yaml OPPLE_DATA=/data PATH="/opt/venv/bin:$PATH"
 WORKDIR /app
-COPY --from=builder /install /usr/local
+COPY --from=builder /opt/venv /opt/venv
 RUN groupadd --gid 10001 light && useradd --uid 10001 --gid 10001 --no-create-home light && mkdir /data /config && chown light:light /data
 COPY app ./app
 COPY config/config.yaml /config/config.yaml

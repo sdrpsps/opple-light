@@ -1,12 +1,9 @@
 import logging
-import os
 import socket
 import time
-from uuid import uuid4
 from dataclasses import dataclass
 from pyoppleio import Message, const
 from pyoppleio.OppleLightDevice import OppleLightDevice
-from .relay_protocol import decode, encode, packet_decode, packet_encode
 
 log = logging.getLogger(__name__)
 
@@ -26,31 +23,15 @@ class BoundedOppleDevice(OppleLightDevice):
     """Keep the upstream protocol, bound receive loops and validate reply origin."""
     def send(self, message_type, data=None, reply=False):
         message = Message.build_message(const.MESSAGE_TYPE[message_type], data, self)
-        relay_address = os.getenv("OPPLE_UDP_RELAY")
-        nonce = None
-        token = os.getenv("OPPLE_RELAY_TOKEN", "")
-        if relay_address:
-            host, port = relay_address.rsplit(":", 1)
-            if len(token) < 20:
-                raise ValueError("UDP relay requires a token of at least 20 characters")
-            nonce = uuid4().hex
-            request = dict(nonce=nonce, target=self.ip, port=self.port, reply=reply, packet=packet_encode(message.data))
-            self.socket.sendto(encode(request, token), (host, int(port)))
-        else:
-            self.socket.sendto(message.data, (self.ip, self.port))
+        self.socket.sendto(message.data, (self.ip, self.port))
         if not reply:
             return None
         deadline = time.monotonic() + 2
         while time.monotonic() < deadline:
             try:
                 self.socket.settimeout(max(0.01, deadline - time.monotonic()))
-                data, address = self.socket.recvfrom(4096 if relay_address else 1024)
-                if relay_address:
-                    response = decode(data, token)
-                    if response.get("nonce") != nonce:
-                        continue
-                    data = packet_decode(response["packet"])
-                elif address[0] != self.ip:
+                data, address = self.socket.recvfrom(1024)
+                if address[0] != self.ip:
                     continue
                 if len(data) < 124:
                     continue
