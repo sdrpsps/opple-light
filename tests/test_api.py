@@ -64,3 +64,24 @@ def test_timer_api_persistence(pocket_factory):
         assert restored['due_at'] == timer['due_at']
         assert client.delete(url).status_code == 204
         assert client.get('/api/v1/lights/bedroom').json()['timer']['status'] == 'cancelled'
+
+
+def test_frontend_root_assets_and_api_routes(pocket_client):
+    import re
+    client, _, _, _ = pocket_client
+    response = client.get('/')
+    assert response.status_code == 200
+    assert response.headers['cache-control'] == 'no-cache'
+    assert '/static/' not in response.text
+    resources = re.findall(r'(?:src|href)="(/[^" ]+)"', response.text)
+    assert any(resource.startswith('/assets/') for resource in resources)
+    for resource in resources:
+        assert client.get(resource).status_code == 200, resource
+    manifest = client.get('/manifest.json').json()
+    assert manifest['start_url'] == '/'
+    assert manifest['icons'][0]['src'] == '/icon.svg'
+    assert client.get('/api/v1/session').json()['authenticated'] is False
+    assert client.get('/api/v1/status').status_code == 401
+    assert client.get('/health/live').status_code == 200
+    assert client.get('/src/main.ts').status_code == 404
+    assert client.get('/static/icon.svg').status_code == 404

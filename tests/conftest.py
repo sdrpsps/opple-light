@@ -16,6 +16,7 @@ def isolated_lights(monkeypatch):
 
 @pytest.fixture
 def pocket_factory(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPPLE_ENV", raising=False)
     for key,value in {
         "OPPLE_OIDC_ISSUER":ISSUER, "OPPLE_PUBLIC_URL":PUBLIC,
         "OPPLE_OIDC_CLIENT_ID":CLIENT, "OPPLE_OIDC_CLIENT_SECRET":"test-client-secret",

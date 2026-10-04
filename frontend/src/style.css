@@ -1,0 +1,64 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-canvas: #f5f5f3;
+  --color-ink: #242629;
+  --color-muted: #747b81;
+  --color-accent: #be8b42;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif;
+}
+
+@layer base {
+  :root {
+    font: 100%/1.5 var(--font-sans);
+    font-optical-sizing: auto;
+    font-synthesis: none;
+    color: var(--color-ink);
+    background: var(--color-canvas);
+  }
+  button,
+  input,
+  select,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  button:disabled,
+  input:disabled,
+  select:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  button,
+  input,
+  select,
+  a {
+    outline-offset: 4px;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-accent);
+  }
+  [hidden] {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0s !important;
+  }
+  button {
+    transform: none !important;
+  }
+}
+@media (prefers-contrast: more) {
+  :root {
+    --color-muted: #444b50;
+  }
+}

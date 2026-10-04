@@ -1,0 +1,4 @@
+# Explicit decisions for dependencies with installation scripts.
+allowBuilds:
+  esbuild: true
+  fsevents: false

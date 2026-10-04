@@ -18,3 +18,7 @@ venv/
 *.db-wal
 test-artifacts/
 node_modules/
+.pnpm-store
+
+# Vue build output
+frontend/dist/

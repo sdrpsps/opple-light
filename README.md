@@ -51,3 +51,21 @@
 - [开发与部署说明（uv）](docs/DEVELOPMENT.md)
 - [Home Assistant OPPLE 集成](https://www.home-assistant.io/integrations/opple/)
 - [许可证](LICENSE)与[第三方版权声明](THIRD_PARTY_NOTICES.txt)
+
+## 前端开发
+
+前端使用 Vue 3 + TypeScript + Tailwind CSS 4 + Vite。执行 `pnpm install --frozen-lockfile`、`pnpm run build` 在 `frontend/dist/` 生成 FastAPI 所需的 Vue 编译产物（不提交到 Git）；`pnpm run dev` 启动支持热更新的前端开发服务器。Docker 会自动构建前端。每个 Vue 组件最多 250 行，由构建命令自动检查。详细流程见 [开发与部署](docs/DEVELOPMENT.md)。
+
+## 开发快捷命令
+
+安装 Python 3.12、uv、Node.js 22.12+ 和 pnpm 11.9.0 后，在项目根目录执行：
+
+```sh
+make setup       # 安装 Python 与前端依赖
+# 首次使用时按 .env.example 填写 .env 中的 Pocket ID 配置
+make dev         # 同时启动 FastAPI 与 Vue，支持热更新
+```
+
+`make dev:api` 和 `make dev:web` 可以分别启动前后端。`make start` 会构建前端后启动 FastAPI，由同一个服务提供网页和 API。`make test` 运行全部测试，`make lint` 检查前端格式和组件行数，`make help` 查看全部命令。
+
+默认 API 地址为 `http://127.0.0.1:8080`，Vue 开发地址为 `http://127.0.0.1:5173/`。可使用 `make dev API_PORT=8090 WEB_PORT=5174` 修改端口，前端代理会随之调整。`make dev` / `make dev:api` 自动启用本地免登录开发模式，无需配置 Pocket ID；正常启动和生产部署仍需认证。详细说明见 [开发与部署](docs/DEVELOPMENT.md)。

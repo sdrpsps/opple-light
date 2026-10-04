@@ -22,3 +22,5 @@ __pycache__
 *.zip
 .DS_Store
 ._*
+
+frontend/dist

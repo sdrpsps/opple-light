@@ -147,7 +147,9 @@ def test_provider_error_is_specific_safe_and_retryable(setup):
         'state':query['state'][0], 'error':'invalid_request',
         'error_description':'<script>secret-code</script>'}, follow_redirects=False)
     assert response.status_code == 400
-    assert '登录参数' in response.text and 'href="/auth/login"' in response.text
+    assert '<div id="app"></div>' in response.text
+    assert '/assets/' in response.text
+    assert '<main' not in response.text
     assert 'secret-code' not in response.text and query['state'][0] not in response.text
     assert response.headers['cache-control'] == 'no-store'
     assert client.get('/api/v1/status').status_code == 401
