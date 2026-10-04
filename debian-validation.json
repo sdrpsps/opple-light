@@ -1,0 +1,70 @@
+{
+  "host": "192.168.111.27",
+  "container": "opple-light-light-1",
+  "network_mode": "host",
+  "relay": false,
+  "samples": [
+    {
+      "id": "bedroom",
+      "name": "房间吸顶灯",
+      "host": "192.168.111.6",
+      "online": true,
+      "state": {
+        "power": false,
+        "brightness_percent": 90,
+        "color_temperature_kelvin": 5000
+      },
+      "pending_settings": {},
+      "last_seen": "2026-10-04T03:35:42.948755+00:00",
+      "error": null,
+      "busy": false,
+      "capabilities": {
+        "min_kelvin": 3000,
+        "max_kelvin": 5700
+      },
+      "timer": null
+    },
+    {
+      "id": "bedroom",
+      "name": "房间吸顶灯",
+      "host": "192.168.111.6",
+      "online": true,
+      "state": {
+        "power": false,
+        "brightness_percent": 90,
+        "color_temperature_kelvin": 5000
+      },
+      "pending_settings": {},
+      "last_seen": "2026-10-04T03:35:45.942015+00:00",
+      "error": null,
+      "busy": false,
+      "capabilities": {
+        "min_kelvin": 3000,
+        "max_kelvin": 5700
+      },
+      "timer": null
+    },
+    {
+      "id": "bedroom",
+      "name": "房间吸顶灯",
+      "host": "192.168.111.6",
+      "online": true,
+      "state": {
+        "power": false,
+        "brightness_percent": 90,
+        "color_temperature_kelvin": 5000
+      },
+      "pending_settings": {},
+      "last_seen": "2026-10-04T03:35:48.995754+00:00",
+      "error": null,
+      "busy": false,
+      "capabilities": {
+        "min_kelvin": 3000,
+        "max_kelvin": 5700
+      },
+      "timer": null
+    }
+  ],
+  "writes_sent": 0,
+  "health": "healthy"
+}

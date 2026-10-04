@@ -1,0 +1,14 @@
+data
+data-demo
+work
+screenshots
+tests
+__pycache__
+**/__pycache__
+.pytest_cache
+*.pyc
+.env
+.git
+*.png
+*.zip
+requirements.in

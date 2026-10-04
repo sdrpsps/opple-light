@@ -1,0 +1,33 @@
+# Optional macOS compatibility deployment; requires start-macos.py.
+name: opple-light
+services:
+  light:
+    image: opple-local:1.0.0
+    build: .
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${OPPLE_BIND_IP:-0.0.0.0}:${OPPLE_PORT:-8080}:8080"
+    environment:
+      OPPLE_MODE: real
+      OPPLE_AUTH_DISABLED: "${OPPLE_AUTH_DISABLED:-1}"
+      OPPLE_TOKEN: "${OPPLE_TOKEN:-}"
+      OPPLE_UDP_RELAY: "${OPPLE_UDP_RELAY:-}"
+      OPPLE_RELAY_TOKEN: "${OPPLE_RELAY_TOKEN:-}"
+    volumes:
+      - ./config/config.yaml:/config/config.yaml:ro
+      - light-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+volumes:
+  light-data:

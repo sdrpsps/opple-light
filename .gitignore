@@ -1,0 +1,21 @@
+.env
+data/
+data-demo/
+work/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Local environments, OS metadata and generated test output
+.venv/
+venv/
+.env.*
+!.env.example
+.DS_Store
+._*
+*.log
+*.db
+*.db-shm
+*.db-wal
+screenshots/motion/
+screenshots/test-backup.json
