@@ -1,11 +1,12 @@
 import os
+from html import escape
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from .config import load_settings
@@ -117,7 +118,26 @@ def create_app(settings=None, data_dir=None):
     async def oidc_callback(request: Request):
         if not pocket:
             raise HTTPException(404, "未启用 Pocket ID")
-        return await pocket.callback(request)
+        try:
+            return await pocket.callback(request)
+        except HTTPException as exc:
+            # Never echo authorization codes, state or provider descriptions into HTML.
+            message = escape(str(exc.detail))
+            response = HTMLResponse(f"""<!doctype html><html lang="zh-CN"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>登录未完成 · 一室光</title>
+<link rel="stylesheet" href="/static/style.css"></head><body class="auth-page">
+<main class="auth-card login-dialog"><div class="dialog-body">
+<span class="brand-mark large" aria-hidden="true"><span></span></span>
+<h2>登录未完成</h2><p role="alert">{message}</p>
+<a class="primary-button" href="/auth/login">重新通过 Pocket ID 登录</a>
+<a class="login-help" href="/">返回一室光</a></div></main></body></html>""",
+                status_code=exc.status_code, headers={"Cache-Control":"no-store", "Referrer-Policy":"no-referrer"})
+            pending = request.cookies.get("opple_oidc_state")
+            if pending:
+                pocket.store.delete(pending)
+            response.delete_cookie("opple_oidc_state", path="/auth", secure=True, samesite="lax")
+            return response
 
     @app.get("/health/live")
     async def health():

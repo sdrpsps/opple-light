@@ -1,12 +1,24 @@
 # Pocket ID 登录与 API 授权
 
-此集成使用 Pocket ID 的 OIDC 和 APIs and permissions 功能。一室光不创建本地用户、密码或角色表。用户与客户端授权在 Pocket ID 中管理，灯具、场景和倒计时仍是共享的。
+网页登录使用 Pocket ID 的标准 OIDC；快捷指令等外部 API 调用使用 APIs and permissions 功能。一室光不创建本地用户、密码或角色表。用户与客户端授权在 Pocket ID 中管理，灯具、场景和倒计时仍是共享的。
 
 以下用 `https://light.example.com` 表示一室光，用 `https://auth.example.com` 表示 Pocket ID。替换为自己的域名。当前实现要求一室光使用独立 HTTPS 域名，不支持 `/light` 子路径。
 
-## 1. 注册 API
+## 1. 注册网页登录客户端
 
-在 Pocket ID 的 Administration → APIs 中创建：
+创建一个 OIDC 客户端，名称如“一室光网页”，可选择公共客户端或保密客户端。配置回调 URL：
+
+```
+https://light.example.com/auth/callback
+```
+
+保留 Client ID。公共客户端没有 Client Secret，服务中的该项留空；保密客户端则填写 Client Secret，服务使用 HTTP Basic 认证交换授权码。两种客户端均使用 PKCE S256。网页登录只请求 `openid profile`，无需注册 API 或配置 API access。使用 Pocket ID 的 Allowed user groups 限定哪些用户可以登录；获得此客户端登录权限的用户可以读取和控制一室光中的共享灯具。
+
+登录采用授权码流程、PKCE S256、state 和 nonce 校验；通行密钥验证由 Pocket ID 完成。服务验证 ID token 的签名、issuer、客户端 audience、期限与 nonce 后建立会话。浏览器只收到随机的 HttpOnly、Secure、SameSite=Lax Cookie，JWT 和客户端密钥不会存入浏览器。会话期限取 ID token 到期时间与八小时上限中的最短值；到期后重新登录，没有自动刷新。
+
+## 2. 注册外部调用 API（可选）
+
+只有快捷指令、自动化或其他外部客户端使用 Bearer 令牌时才需要本节。Pocket ID 的 Administration → APIs 中创建：
 
 | 设置 | 值 |
 | --- | --- |
@@ -15,31 +27,21 @@
 | Permission key | `lights:read` |
 | Permission key | `lights:control` |
 
-Resource 是令牌的 audience 标识，不需要提供对应的网页。必须与 `OPPLE_OIDC_RESOURCE` 完全一致。读取灯具、场景、操作记录及导出需要 `lights:read`；修改灯光、场景、倒计时和主动刷新需要 `lights:control`。
-
-## 2. 注册网页登录客户端
-
-创建一个保密 OIDC 客户端，名称如“一室光网页”。配置回调 URL：
-
-```
-https://light.example.com/auth/callback
-```
-
-保留 Client ID 和 Client Secret。在该客户端 Access → API access 中添加一室光 API，启用 **User-delegated access**，授予 `lights:read` 和 `lights:control`。网页登录需要这两项权限。可以使用 Pocket ID 的 Allowed user groups 限定哪些用户可以登录。
-
-登录采用授权码流程、PKCE S256、state 和 nonce 校验；通行密钥验证由 Pocket ID 完成。浏览器只收到随机的 HttpOnly、Secure、SameSite=Lax Cookie，JWT 和客户端密钥不会存入浏览器。服务只保存会话摘要、主体标识、显示名、权限和期限。会话期限取 ID token、access token 到期时间与八小时上限中的最短值；到期后重新登录，没有自动刷新。
+Resource 是令牌的 audience 标识，不需要提供网页。必须与 `OPPLE_OIDC_RESOURCE` 完全一致。外部调用读取需要 `lights:read`，修改需要 `lights:control`。此配置与网页会话独立，不能用 ID token 作为 API 访问令牌。
 
 ## 3. 配置并启动
 
-在服务目录的 `.env` 中填写以下内容，Client Secret 只在服务器上填写，不提交 Git：
+在服务目录的 `.env` 中填写以下内容，公共客户端将 Client Secret 留空；若使用保密客户端，密钥只在服务器上填写，不提交 Git：
 
 ```dotenv
 OPPLE_PUBLIC_URL=https://light.example.com
 OPPLE_OIDC_ISSUER=https://auth.example.com
 OPPLE_OIDC_CLIENT_ID=填写网页客户端ID
-OPPLE_OIDC_CLIENT_SECRET=填写网页客户端密钥
+OPPLE_OIDC_CLIENT_SECRET=
 OPPLE_OIDC_RESOURCE=https://light.example.com/api
 ```
+
+公共客户端需在 Pocket ID 中启用“公共客户端”，并清空服务配置里的旧 Client Secret；保密客户端将其填写为对应密钥。不要只改服务配置而不调整 Pocket ID 客户端类型。
 
 ```sh
 chmod 600 .env
@@ -54,7 +56,7 @@ Cloudflare Tunnel 将一室光域名转发到部署机的 `http://127.0.0.1:8080
 
 ## 4. 苹果快捷指令
 
-另建一个保密 OIDC 客户端，名称如“一室光快捷指令”。在 Access → API access 中添加一室光 API，启用 **Client access (M2M)** 并授予两项权限。它与网页登录客户端分别管理和撤销。
+先完成第 2 节的 API 注册，再另建一个保密 OIDC 客户端，名称如“一室光快捷指令”。在 Access → API access 中添加一室光 API，启用 **Client access (M2M)** 并授予两项权限。它与网页登录客户端分别管理和撤销。
 
 快捷指令先执行“获取 URL 内容”：
 
@@ -84,3 +86,9 @@ JWT 使用 PyJWT 验证 RS256 签名、issuer、audience、有效期和权限。
 登录事务和会话保存在数据卷 `auth.db`，控制数据仍在 `service.db`。网页导出不包含认证数据。真实首次联调顺序：匿名 API 返回 401 → 登录成功 → 状态读取成功 → 退出后 401 → 快捷指令令牌读取成功。确认上述步骤后再测试一次真实灯具写入。
 
 参考：[Pocket ID APIs and permissions](https://pocket-id.org/docs/guides/apis)、[OIDC client authentication](https://pocket-id.org/docs/guides/oidc-client-authentication)、[Pocket ID 管理 REST API](https://pocket-id.org/docs/api)。
+
+## 登录问题
+
+`invalid_request` 并提示 resource/scope 无效：旧版网页登录同时请求了 API 资源权限，客户端未获授权时 Pocket ID 会拒绝请求。更新服务后，网页登录仅请求 `openid profile`。更新后从首页重新点击登录，不要刷新或重复使用旧的回调地址。
+
+登录失败会显示原因与重试按钮；授权码、state 和身份服务返回的原始描述不会显示在错误页面中。过期、重复使用的事务仍会被拒绝。

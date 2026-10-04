@@ -50,8 +50,8 @@ class PocketConfig:
         client = os.getenv("OPPLE_OIDC_CLIENT_ID", "").strip()
         secret = secret_setting("OPPLE_OIDC_CLIENT_SECRET")
         resource = https_url(os.getenv("OPPLE_OIDC_RESOURCE") or public + "/api", "OPPLE_OIDC_RESOURCE")
-        if not client or not secret:
-            raise ValueError("Pocket ID 模式需要 OPPLE_OIDC_CLIENT_ID 和 OPPLE_OIDC_CLIENT_SECRET（或 _FILE）")
+        if not client:
+            raise ValueError("Pocket ID 需要 OPPLE_OIDC_CLIENT_ID；公共客户端无需 Client Secret")
         return cls(issuer, public, client, secret, resource)
 
 
@@ -181,7 +181,7 @@ class PocketAuth:
         query = urlencode({"response_type":"code", "client_id":self.config.client_id,
                            "redirect_uri":self.config.public_url + "/auth/callback", "state":state, "nonce":nonce,
                            "code_challenge":challenge, "code_challenge_method":"S256",
-                           "resource":self.config.resource, "scope":f"openid profile {READ} {CONTROL}"})
+                           "scope":"openid profile"})
         response = RedirectResponse(self.metadata["authorization_endpoint"] + "?" + query, status_code=302)
         response.set_cookie(STATE_COOKIE,state,max_age=600,httponly=True,secure=True,samesite="lax",path="/auth")
         response.headers["Cache-Control"] = "no-store"
@@ -194,15 +194,30 @@ class PocketAuth:
         if not state or not cookie or not secrets.compare_digest(state,cookie):
             raise HTTPException(400, "登录请求不匹配，请重新登录")
         transaction = self.store.get(state, "login", consume=True)
-        if not transaction or request.query_params.get("error") or not request.query_params.get("code"):
-            raise HTTPException(400, "登录请求已失效或未获授权，请重新登录")
+        if not transaction:
+            raise HTTPException(400, "登录请求已过期或已经使用，请重新登录")
+        error = request.query_params.get("error")
+        if error:
+            messages = {
+                "access_denied": "Pocket ID 拒绝了登录，请确认你的账户允许访问一室光，或重新授权。",
+                "invalid_request": "Pocket ID 拒绝了登录参数，请检查客户端设置和回调地址。",
+                "invalid_scope": "Pocket ID 不支持请求的登录权限，请检查客户端设置。",
+                "invalid_target": "Pocket ID 未授权请求的 API 资源，请检查客户端的 API access 设置。",
+            }
+            raise HTTPException(400, messages.get(error, "Pocket ID 未完成授权，请重新登录。"))
+        if not request.query_params.get("code"):
+            raise HTTPException(400, "Pocket ID 未返回登录授权码，请重新登录")
         if request.query_params.get("iss", self.config.issuer) != self.config.issuer:
             raise HTTPException(400, "登录响应来源不匹配")
         try:
-            response = await self.client.post(self.metadata["token_endpoint"],
-                auth=httpx.BasicAuth(self.config.client_id,self.config.client_secret),
-                data={"grant_type":"authorization_code", "code":request.query_params["code"],
-                      "redirect_uri":self.config.public_url + "/auth/callback", "code_verifier":transaction["verifier"], "resource":self.config.resource})
+            data = {"grant_type":"authorization_code", "code":request.query_params["code"],
+                    "redirect_uri":self.config.public_url + "/auth/callback", "code_verifier":transaction["verifier"]}
+            auth = None
+            if self.config.client_secret:
+                auth = httpx.BasicAuth(self.config.client_id, self.config.client_secret)
+            else:
+                data["client_id"] = self.config.client_id
+            response = await self.client.post(self.metadata["token_endpoint"], auth=auth, data=data)
             response.raise_for_status()
             token = response.json()
             identity = await self.claims(token["id_token"],self.config.client_id)
@@ -217,15 +232,11 @@ class PocketAuth:
                 expected = base64.urlsafe_b64encode(digest[:len(digest)//2]).rstrip(b"=").decode()
                 if not isinstance(identity["at_hash"], str) or not secrets.compare_digest(identity["at_hash"], expected):
                     raise HTTPException(400, "登录访问令牌不匹配")
-            access = await self.claims(token["access_token"],self.config.resource)
-            if identity["sub"] != access["sub"]:
-                raise HTTPException(400, "登录身份不匹配")
-            scopes = access.get("scope", "")
-            if not isinstance(scopes,str) or not {READ,CONTROL}.issubset(scopes.split()):
-                raise HTTPException(403, "Pocket ID 尚未授予一室光的读取与控制权限")
-            expiry = min(time.time() + 8*3600,identity["exp"],access["exp"])
+            # Browser access is granted by the OIDC client's allowed users/groups.
+            # API-resource tokens are independent and remain strictly scoped.
+            expiry = min(time.time() + 8*3600, identity["exp"])
             session = secrets.token_urlsafe(32)
-            self.store.put(session,"session",expiry,{"sub":identity["sub"],"scopes":scopes.split(),
+            self.store.put(session,"session",expiry,{"sub":identity["sub"],"scopes":[READ, CONTROL],
                            "name":str(identity.get("name") or identity.get("preferred_username") or "已登录")[:100]})
             old = request.cookies.get(SESSION_COOKIE)
             if old: self.store.delete(old)

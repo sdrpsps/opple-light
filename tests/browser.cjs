@@ -47,6 +47,19 @@ const mime = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.sv
     assert(await page.locator('#pocket-login').isVisible());
     assert.equal(await page.locator('input[type=password], #login-form').count(), 0);
     assert.match(await page.locator('#login-description').textContent(), /通行密钥/);
+    for (const width of [320,390,768,1440]) {
+      await page.setViewportSize({width,height:844});
+      await page.waitForTimeout(500);
+      const layout = await page.evaluate(() => {
+        const dialog = document.querySelector('#login-dialog').getBoundingClientRect();
+        const description = document.querySelector('#login-description').getBoundingClientRect();
+        const button = document.querySelector('#pocket-login').getBoundingClientRect();
+        return {x:dialog.x,right:dialog.right,bottom:dialog.bottom,gap:button.top-description.bottom};
+      });
+      assert(layout.x >= 15 && layout.right <= width-15);
+      assert(layout.bottom <= 844 && layout.gap >= 18);
+    }
+    await page.setViewportSize({width:390,height:844});
     fs.mkdirSync(artifacts,{recursive:true});
     await page.screenshot({path:path.join(artifacts,'pocket-login.png')});
     authenticated = true;

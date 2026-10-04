@@ -8,7 +8,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
-from app.auth import CONTROL, READ, SESSION_COOKIE
+from app.auth import CONTROL, READ, SESSION_COOKIE, PocketConfig
 from app.config import LightConfig, Settings
 from app.main import create_app
 
@@ -61,8 +61,8 @@ def test_id_token_forgery_and_unsigned_tokens_are_rejected(setup):
 def test_oidc_pkce_session_logout_and_replay(setup):
     client,provider,app,path = setup
     query = start_login(client,provider)
-    assert query['resource']==[RESOURCE] and query['code_challenge_method']==['S256']
-    assert set(query['scope'][0].split())=={'openid','profile',READ,CONTROL}
+    assert 'resource' not in query and query['code_challenge_method']==['S256']
+    assert set(query['scope'][0].split())=={'openid','profile'}
     state=query['state'][0]
     transaction=app.state.pocket.store.get(state,'login')
     challenge=base64.urlsafe_b64encode(hashlib.sha256(transaction['verifier'].encode()).digest()).rstrip(b'=').decode()
@@ -93,6 +93,7 @@ def test_login_state_and_nonce_validation(setup):
     client,provider,app,_ = setup
     query=start_login(client,provider)
     assert client.get('/auth/callback',params={'state':'wrong','code':'test'},follow_redirects=False).status_code==400
+    query=start_login(client,provider)
     provider.bad_nonce=True
     assert finish_login(client,query).status_code==400
     assert client.get('/api/v1/status').status_code==401
@@ -137,3 +138,55 @@ def test_incomplete_config_fails_closed(monkeypatch,tmp_path):
     with pytest.raises(ValueError):
         with TestClient(create_app(settings,tmp_path)):
             pass
+
+
+def test_provider_error_is_specific_safe_and_retryable(setup):
+    client, provider, app, _ = setup
+    query = start_login(client, provider)
+    response = client.get('/auth/callback', params={
+        'state':query['state'][0], 'error':'invalid_request',
+        'error_description':'<script>secret-code</script>'}, follow_redirects=False)
+    assert response.status_code == 400
+    assert '登录参数' in response.text and 'href="/auth/login"' in response.text
+    assert 'secret-code' not in response.text and query['state'][0] not in response.text
+    assert response.headers['cache-control'] == 'no-store'
+    assert client.get('/api/v1/status').status_code == 401
+    assert finish_login(client, start_login(client, provider)).status_code == 303
+
+
+def test_browser_login_does_not_require_api_resource_grant(setup, monkeypatch):
+    client, provider, app, _ = setup
+    original = provider.token
+    # A normal OIDC access token has the client audience and no API permissions.
+    monkeypatch.setattr(provider, 'token', lambda **changes: original(**({'aud':CLIENT,'scope':'openid profile'} | changes)))
+    response = finish_login(client, start_login(client, provider))
+    assert response.status_code == 303
+    assert client.get('/api/v1/status').status_code == 200
+    assert client.post('/api/v1/lights/bedroom/refresh').status_code == 202
+    exchange = parse_qs(provider.requests[-1].content.decode())
+    assert 'resource' not in exchange
+    assert client.get('/api/v1/status', headers=headers(provider)).status_code == 401
+
+
+def test_public_client_pkce_login(pocket_factory, monkeypatch):
+    app, provider, path = pocket_factory
+    monkeypatch.setenv('OPPLE_OIDC_CLIENT_SECRET', '')
+    assert PocketConfig.from_env().client_secret == ''
+    with TestClient(app, base_url=PUBLIC) as client:
+        query = start_login(client, provider)
+        assert query['code_challenge_method'] == ['S256']
+        assert finish_login(client, query).status_code == 303
+        request = provider.requests[-1]
+        body = parse_qs(request.content.decode())
+        assert body['client_id'] == [CLIENT] and body['code_verifier']
+        assert 'authorization' not in request.headers and 'client_secret' not in body
+        assert client.get('/api/v1/status').status_code == 200
+        assert client.get('/api/v1/status', headers={'Authorization':'Bearer wrong'}).status_code == 401
+
+
+def test_missing_client_id_is_rejected(monkeypatch):
+    monkeypatch.setenv('OPPLE_OIDC_ISSUER', ISSUER)
+    monkeypatch.setenv('OPPLE_PUBLIC_URL', PUBLIC)
+    monkeypatch.setenv('OPPLE_OIDC_CLIENT_ID', '')
+    with pytest.raises(ValueError, match='OPPLE_OIDC_CLIENT_ID'):
+        PocketConfig.from_env()
