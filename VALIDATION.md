@@ -91,3 +91,9 @@ Linux/NAS 网络、其他型号或固件、多灯硬件、真实灯具的最低�
 应用 apple-design 技能更新系统字体、材质层次、暖金色控制开关、连续预览与色温选择指示条。自包含 motion.js 使用 requestAnimationFrame 弹簧积分，重定向保留当前位移和速度，手机底部弹窗支持指针捕获、释放速度投影和回弹。
 
 隔离演示环境浏览器完整流程通过：开关、关灯参数暂存、场景编辑、倒计时取消与真实 60 秒到期、断线恢复、备份，以及 320/390/768/1440 宽度布局。新增动画检查在演示和 Debian 真实页面均通过：44px 滑杆触摸区域、弹窗关闭途中重新打开、Escape、手机下拉关闭、减少动态效果、无 JavaScript 错误；真实页面测试拦截所有 API 写请求。真实灯具仍为关灯、90% 亮度、5000 K。截图位于 screenshots/apple-real。
+
+## 2026-10-04 Pocket ID 可选认证
+
+实现 OIDC 授权码登录、PKCE S256、state/nonce、服务端随机会话和带 scope 的 OAuth API 验签；没有本地用户管理。31 项 Python 测试通过，使用隔离模拟身份服务及生成的 RSA 密钥，覆盖只读/控制权限、旧凭证拒绝、错误 issuer/audience/签名/期限、登录重放、退出与过期、公钥轮换、ID token 客户端及 access token 绑定。Chrome 演示界面测试通过 Pocket ID、旧口令和免登录三种模式，无 JavaScript 错误，无 API 写入。
+
+实际 Pocket ID 发现端点确认支持授权码、PKCE S256、RS256 和 client_credentials。尚未配置真实 OIDC Client ID/Secret，也未完成真实登录、API 权限授予或快捷指令联调。认证模式没有在 Debian 启用，原内网免口令服务保持原部署；本次未控制真实灯具。配置步骤见 docs/POCKET_ID.md。

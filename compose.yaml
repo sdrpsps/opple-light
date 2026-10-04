@@ -9,6 +9,12 @@ services:
     network_mode: host
     environment:
       OPPLE_MODE: real
+      OPPLE_AUTH_MODE: "${OPPLE_AUTH_MODE:-}"
+      OPPLE_PUBLIC_URL: "${OPPLE_PUBLIC_URL:-}"
+      OPPLE_OIDC_ISSUER: "${OPPLE_OIDC_ISSUER:-}"
+      OPPLE_OIDC_CLIENT_ID: "${OPPLE_OIDC_CLIENT_ID:-}"
+      OPPLE_OIDC_CLIENT_SECRET: "${OPPLE_OIDC_CLIENT_SECRET:-}"
+      OPPLE_OIDC_RESOURCE: "${OPPLE_OIDC_RESOURCE:-}"
       OPPLE_AUTH_DISABLED: "${OPPLE_AUTH_DISABLED:-1}"
       OPPLE_TOKEN: "${OPPLE_TOKEN:-}"
     volumes:

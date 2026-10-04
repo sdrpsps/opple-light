@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let snapshot = null, scenes = [], selectedId = localStorage.getItem('opple-light') || 'bedroom';
-let authRequired = true;
+let authRequired = true, authMode = "token";
 let authenticated = false, connectionLost = false, editingScene = null, serverOffset = 0;
 let pendingTarget = null, sending = false, toastTimeout = null, updatePromise = null;
 let pointerRange = null, lastTimerStatus = null, sceneSignature = null;
@@ -19,6 +19,10 @@ function notify(message, error = false) {
 }
 function showLogin() {
   authenticated = false;
+  const pocket = authMode === 'pocketid';
+  $('login-form').hidden = pocket; $('pocket-login').hidden = !pocket;
+  $('login-description').textContent = pocket ? '使用你的通行密钥登录，继续控制灯光。' : '输入服务的访问口令，开始控制灯光。';
+  document.querySelector('.login-help').textContent = pocket ? '登录由 Pocket ID 提供。' : '首次使用：在部署说明中查看口令获取方法。';
   for (const dialog of document.querySelectorAll('dialog[open]')) LightMotion.close(dialog);
   if (!$('login-dialog').open) LightMotion.open($('login-dialog'));
 }
@@ -270,7 +274,7 @@ $('backup-button').addEventListener('click', async () => {
 });
 async function boot() {
   try {
-    const session = await api('/session'); authenticated = session.authenticated; authRequired = session.auth_required !== false;
+    const session = await api('/session'); authenticated = session.authenticated; authRequired = session.auth_required !== false; authMode = session.auth_mode || "token";
     if (!authenticated) { showLogin(); return; }
     scenes = await api('/scenes'); await update();
   } catch (error) { $('connection-warning').hidden = false; $('connection-warning').textContent = error.message; setTimeout(boot, 5000); }

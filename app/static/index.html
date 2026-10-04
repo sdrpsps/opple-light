@@ -81,7 +81,8 @@
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <dialog id="login-dialog" class="login-dialog">
-    <div class="dialog-body"><span class="brand-mark large"><span></span></span><h2>欢迎回到一室光</h2><p>输入服务的访问口令，开始控制灯光。</p>
+    <div class="dialog-body"><span class="brand-mark large"><span></span></span><h2>欢迎回到一室光</h2><p id="login-description">输入服务的访问口令，开始控制灯光。</p>
+      <a id="pocket-login" class="primary-button" href="/auth/login" hidden>通过 Pocket ID 登录</a>
       <form id="login-form"><label for="login-token">访问口令</label><input id="login-token" type="password" autocomplete="current-password" required placeholder="输入访问口令"><p id="login-error" class="form-error" role="alert"></p><button type="submit" class="primary-button">进入灯光面板</button></form>
       <p class="login-help">首次使用：在部署说明中查看口令获取方法。</p>
     </div>

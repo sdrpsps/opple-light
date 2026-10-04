@@ -17,6 +17,7 @@
 - 1–1440 分钟倒计时关灯，支持取消、重启恢复和过期限制。
 - 手机与桌面网页，无外部字体、CDN 或前端构建依赖。
 - 局域网免口令访问、HTTP API、操作记录、配置导出；可选口令模式。
+- 可选 Pocket ID 登录与 OAuth API 权限，支持苹果快捷指令使用客户端凭证取令牌。
 - 完全隔离的演示模式，演示操作不会连接真实灯具。
 
 每周定时、渐变、自动色温和 MQTT 属于后续扩展，本版本没有启用这些功能。
@@ -138,7 +139,9 @@ lights:
 
 ## HTTP API
 
-除 `/health/live`、会话查询和登录外，接口需要认证。脚本使用请求头 `Authorization: Bearer <访问口令>`；网页使用 HttpOnly 会话 Cookie。
+免口令模式允许匿名请求。口令模式下，脚本使用请求头 `Authorization: Bearer <访问口令>`；网页使用 HttpOnly 会话 Cookie。Pocket ID 模式改为验证 OAuth access token 和登录会话；读取需要 `lights:read`，写入需要 `lights:control`。健康检查、会话查询和登录入口可匿名访问。
+
+Pocket ID 配置、API 注册与苹果快捷指令示例见 [Pocket ID 接入说明](docs/POCKET_ID.md)。该模式不增加本地用户管理，也不会自动启用；默认内网访问保持原配置。
 
 | 方法与路径 | 用途 |
 | --- | --- |

@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from .config import load_settings
 from .service import LightService
 from .storage import Storage
+from .auth import CONTROL, READ, PocketAuth, PocketConfig
 
 VERSION = "1.0.0"
 STATIC = Path(__file__).parent / "static"
@@ -50,13 +51,17 @@ def create_app(settings=None, data_dir=None, access_token=None, open_demo=False)
     data_dir = Path(data_dir or os.getenv("OPPLE_DATA", "data"))
     open_demo = (open_demo or os.getenv("OPPLE_DEMO_OPEN") == "1") and settings.mode == "demo"
 
-    auth_required = not (open_demo or os.getenv("OPPLE_AUTH_DISABLED") == "1")
+    auth_mode = os.getenv("OPPLE_AUTH_MODE", "").strip() or ("open" if open_demo or os.getenv("OPPLE_AUTH_DISABLED") == "1" else "token")
+    if auth_mode not in ("open", "token", "pocketid"):
+        raise ValueError("OPPLE_AUTH_MODE 必须为 open、token 或 pocketid")
+    auth_required = auth_mode != "open"
+    pocket = PocketAuth(PocketConfig.from_env()) if auth_mode == "pocketid" else None
 
     @asynccontextmanager
     async def lifespan(app):
         data_dir.mkdir(parents=True, exist_ok=True)
-        token = (access_token or os.getenv("OPPLE_TOKEN")) if auth_required else ""
-        if auth_required and not token:
+        token = (access_token or os.getenv("OPPLE_TOKEN")) if auth_mode == "token" else ""
+        if auth_mode == "token" and not token:
             path = data_dir / "access-token"
             if path.exists():
                 token = path.read_text().strip()
@@ -68,21 +73,31 @@ def create_app(settings=None, data_dir=None, access_token=None, open_demo=False)
                 with os.fdopen(descriptor, "w") as file:
                     file.write(token + "\n")
                 log.info("访问口令已生成，保存在数据目录的 access-token 文件中")
+        if pocket:
+            await pocket.start(data_dir)
+        app.state.pocket = pocket
         app.state.token = token
         app.state.cookie = hmac.new(token.encode(), b"opple-session-v1", hashlib.sha256).hexdigest()
         app.state.login_attempts = {}
         app.state.storage = Storage(data_dir / "service.db")
         app.state.service = LightService(settings, app.state.storage)
-        await app.state.service.start()
         try:
+            await app.state.service.start()
             yield
         finally:
             await app.state.service.stop()
             app.state.storage.close()
+            if pocket:
+                await pocket.close()
 
     app = FastAPI(title="一室光 · OPPLE 本地控制", version=VERSION, lifespan=lifespan, docs_url=None, redoc_url=None)
 
-    def authenticated(request):
+    async def authenticated(request):
+        if pocket:
+            try:
+                return bool(await pocket.principal(request))
+            except HTTPException:
+                return False
         if not auth_required:
             return True
         bearer = request.headers.get("authorization", "")
@@ -93,15 +108,24 @@ def create_app(settings=None, data_dir=None, access_token=None, open_demo=False)
         if request.url.path.startswith("/api/"):
             if request.method not in ("GET", "HEAD", "OPTIONS"):
                 origin = request.headers.get("origin")
-                if origin and urlsplit(origin).netloc != request.headers.get("host"):
+                allowed_origin = pocket.config.public_url if pocket else None
+                if origin and ((allowed_origin and origin != allowed_origin) or
+                               (not allowed_origin and urlsplit(origin).netloc != request.headers.get("host"))):
                     return JSONResponse({"detail": "请从本服务页面发起操作"}, status_code=403)
-            if request.url.path not in ("/api/v1/session",) and not authenticated(request):
-                return JSONResponse({"detail": "请先输入访问口令"}, status_code=401)
+            if request.url.path != "/api/v1/session":
+                if pocket:
+                    try:
+                        request.state.principal = await pocket.authorize(request, READ if request.method in ("GET", "HEAD", "OPTIONS") else CONTROL)
+                    except HTTPException as exc:
+                        return JSONResponse({"detail":exc.detail},status_code=exc.status_code,
+                                            headers={"Cache-Control":"no-store", **({"WWW-Authenticate":"Bearer"} if exc.status_code == 401 else {})})
+                elif not await authenticated(request):
+                    return JSONResponse({"detail": "请先输入访问口令"}, status_code=401)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "same-origin"
+        response.headers["Referrer-Policy"] = "no-referrer" if request.url.path.startswith("/auth/") else "same-origin"
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'"
-        if request.url.path.startswith("/api/"):
+        if request.url.path.startswith(("/api/", "/auth/")):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -119,16 +143,31 @@ def create_app(settings=None, data_dir=None, access_token=None, open_demo=False)
         except OverflowError as exc:
             raise HTTPException(429, str(exc)) from exc
 
+    @app.get("/auth/login")
+    async def oidc_login():
+        if not pocket:
+            raise HTTPException(404, "未启用 Pocket ID")
+        return await pocket.login()
+
+    @app.get("/auth/callback")
+    async def oidc_callback(request: Request):
+        if not pocket:
+            raise HTTPException(404, "未启用 Pocket ID")
+        return await pocket.callback(request)
+
     @app.get("/health/live")
     async def health():
         return {"status": "ok", "version": VERSION}
 
     @app.get("/api/v1/session")
     async def session(request: Request):
-        return {"authenticated": bool(authenticated(request)), "mode": settings.mode, "name": settings.name, "auth_required": auth_required}
+        return {"authenticated": await authenticated(request), "mode": settings.mode, "name": settings.name,
+                "auth_required": auth_required, "auth_mode": auth_mode}
 
     @app.post("/api/v1/session")
     async def login(body: LoginBody, request: Request, response: Response):
+        if pocket:
+            raise HTTPException(400, "请使用 Pocket ID 登录入口")
         if not auth_required:
             return {"authenticated": True}
         ip = request.client.host if request.client else "unknown"
@@ -147,7 +186,9 @@ def create_app(settings=None, data_dir=None, access_token=None, open_demo=False)
         return {"authenticated": True}
 
     @app.delete("/api/v1/session")
-    async def logout(response: Response):
+    async def logout(request: Request, response: Response):
+        if pocket:
+            pocket.logout(request,response)
         response.delete_cookie("opple_session")
         return {"authenticated": False}
 
