@@ -5,7 +5,6 @@
 .venv
 venv
 data
-data-demo
 work
 test-artifacts
 node_modules

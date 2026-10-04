@@ -34,7 +34,6 @@ https://light.example.com/auth/callback
 在服务目录的 `.env` 中填写以下内容，Client Secret 只在服务器上填写，不提交 Git：
 
 ```dotenv
-OPPLE_AUTH_MODE=pocketid
 OPPLE_PUBLIC_URL=https://light.example.com
 OPPLE_OIDC_ISSUER=https://auth.example.com
 OPPLE_OIDC_CLIENT_ID=填写网页客户端ID
@@ -47,7 +46,7 @@ chmod 600 .env
 docker compose up -d --build
 ```
 
-`OPPLE_AUTH_MODE=pocketid` 优先于旧的 `OPPLE_AUTH_DISABLED=1`；缺少配置或启动时身份服务不可用会导致启动失败，不会退回免登录。未配置 `OPPLE_AUTH_MODE` 时仍沿用原来的内网免口令/口令行为。
+Pocket ID 是唯一认证方式。缺少配置或启动时身份服务不可用会导致启动失败，不会退回匿名访问。旧的认证模式、口令和演示环境变量均已移除。
 
 Cloudflare Tunnel 将一室光域名转发到部署机的 `http://127.0.0.1:8080`，Pocket ID 域名转发到其原有服务。用户通过 HTTPS 的一室光域名登录。此模式同时保护内网 IP 的 API；HTTP 内网地址不能承载 Secure 登录 Cookie。服务宿主机仍需要能访问灯具所在局域网。
 

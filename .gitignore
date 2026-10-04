@@ -1,6 +1,5 @@
 .env
 data/
-data-demo/
 work/
 __pycache__/
 .pytest_cache/

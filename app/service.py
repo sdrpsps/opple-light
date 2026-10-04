@@ -4,7 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from uuid import uuid4
-from .driver import DemoDriver, OppleDriver, DeviceUnavailable
+from .driver import OppleDriver, DeviceUnavailable
 from .storage import utc_now
 
 log = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 class LightController:
     def __init__(self, config, settings, storage, driver=None):
         self.config, self.settings, self.storage = config, settings, storage
-        self.driver = driver or (DemoDriver(config) if settings.mode == "demo" else OppleDriver(config.host))
+        self.driver = driver or OppleDriver(config.host)
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"opple-{config.id}")
         self.queue = asyncio.Queue(maxsize=32)
         self.online = False
@@ -42,7 +42,7 @@ class LightController:
         was_offline = not self.online
         self.reading, self.online, self.error, self.last_seen = reading, True, None, utc_now()
         if was_offline:
-            self.storage.event(self.config.id, "connection", "灯具已连接" if self.settings.mode == "real" else "演示灯具已就绪")
+            self.storage.event(self.config.id, "connection", "灯具已连接")
 
     async def read(self):
         # UDP may lose a single reply. Retry the read once before declaring the

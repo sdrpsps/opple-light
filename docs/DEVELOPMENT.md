@@ -13,23 +13,22 @@ uv run --locked pytest -q
 
 uv 创建项目内的 `.venv`。开发依赖默认安装；只有运行服务时可以使用 `uv sync --locked --no-dev`。添加依赖使用 `uv add 包名`，添加测试工具使用 `uv add --dev 包名`，移除依赖使用 `uv remove 包名`。升级时使用 `uv lock --upgrade-package 包名`，随后执行同步和测试。提交 `pyproject.toml` 与 `uv.lock`，不提交虚拟环境。
 
-隔离演示服务使用模拟灯具，不访问真实灯具：
+本地启动同样需要真实 Pocket ID 配置。先填写 `.env`，再运行：
 
 ```sh
-OPPLE_MODE=demo OPPLE_DEMO_OPEN=1 OPPLE_AUTH_MODE=open OPPLE_DATA=./data-demo \
-  uv run --locked uvicorn app.main:app --host 127.0.0.1 --port 8086
+uv run --locked --env-file .env uvicorn app.main:app --host 127.0.0.1 --port 8080
 ```
+
+登录需要从配置的 HTTPS 对外域名访问。测试中的模拟设备和身份服务仅存在于 `tests/`，应用和 Docker 运行镜像不包含模拟模式。
 
 浏览器测试需要 Node.js、Playwright 和 Chrome：
 
 ```sh
 npm install --no-save --package-lock=false playwright
 PLAYWRIGHT_CHANNEL=chrome node tests/browser.cjs
-PLAYWRIGHT_CHANNEL=chrome node tests/motion.cjs
-TEST_URL=http://127.0.0.1:8086 PLAYWRIGHT_CHANNEL=chrome node tests/auth-ui.cjs
 ```
 
-`browser.cjs` 会修改演示灯具并验证完整 60 秒倒计时；禁止用于真实设备写入。`motion.cjs` 只验证布局与动画，拦截所有 API 写请求。`auth-ui.cjs` 在演示页面模拟会话响应，验证三种登录界面，不连接真实 Pocket ID。浏览器测试产物写入被 Git 忽略的 `test-artifacts/`。
+浏览器测试独立提供静态页面并拦截全部 API，覆盖 Pocket ID 登录入口、退出、会话过期、布局和动画，不连接真实身份服务或灯具。产物写入被 Git 忽略的 `test-artifacts/`。
 
 ## 单容器 Docker 部署
 
@@ -40,7 +39,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-HTTP 监听 8080。默认内网免口令；可使用 `.env.example` 配置口令或 [Pocket ID](POCKET_ID.md)。配置灯具使用 `config/config.yaml`，修改后重启服务。Mac 虚拟化容器的网络不保证能直连灯具，当前项目不提供 Mac UDP 转发兼容方案；可以在 Mac 运行隔离演示。
+HTTP 监听 8080。启动前必须按 `.env.example` 配置 [Pocket ID](POCKET_ID.md)。配置灯具使用 `config/config.yaml`，修改后重启服务。升级旧版时需同步新的配置格式，删除原配置中的 `mode`、`default_kelvin` 和 `default_brightness` 字段；服务仅连接真实灯具。Mac 虚拟化容器的网络不保证能直连灯具，建议在原生 Linux 部署。
 
 Docker 构建使用 `uv sync --locked --no-dev --no-install-project`，只安装锁定的运行依赖。运行镜像包含虚拟环境，不包含 uv、编译器或测试依赖；以非 root 用户启动，适配 Compose 的只读根文件系统。
 
@@ -67,4 +66,4 @@ GitHub Actions 沿用现有发布工作流，通过 Dockerfile 使用 uv 和锁�
 | `docs/` | 开发、部署与 Pocket ID 说明 |
 | `screenshots/` | 当前页面的桌面与手机截图 |
 
-`.env`、`data/`、`data-demo/`、`.venv/` 和 `test-artifacts/` 是本地配置或生成内容，均不进入 Git 与 Docker 构建上下文。清理代码不删除这些运行数据。Docker 数据卷保存状态、场景和倒计时；`docker compose down` 保留数据，需要保留数据时不要使用 `down -v`。
+`.env`、`data/`、`.venv/` 和 `test-artifacts/` 是本地配置或生成内容，均不进入 Git 与 Docker 构建上下文。清理代码不删除这些运行数据。Docker 数据卷保存状态、场景和倒计时；`docker compose down` 保留数据，需要保留数据时不要使用 `down -v`。

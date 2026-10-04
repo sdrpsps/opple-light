@@ -1,94 +1,90 @@
-/* Run against the isolated DEMO service only. Requires `playwright`. */
+/* Browser tests serve only static assets and mock all APIs. No real device calls. */
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
+const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
-const url = process.env.TEST_URL || 'http://127.0.0.1:8086';
+const staticRoot = path.resolve(__dirname, '../app/static');
 const artifacts = path.resolve(process.env.TEST_ARTIFACTS || 'test-artifacts/browser');
+const mime = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.json':'application/json'};
 
 (async () => {
-  const session = await (await fetch(url + '/api/v1/session')).json();
-  assert.equal(session.mode, 'demo', 'Browser write tests MUST run against demo mode');
-  assert.equal(session.authenticated, true, 'Start the demo with OPPLE_DEMO_OPEN=1');
-  fs.mkdirSync(artifacts, {recursive:true});
-  const browser = await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHANNEL ? {channel:process.env.PLAYWRIGHT_CHANNEL} : {})});
-  const context = await browser.newContext({viewport:{width:1440,height:1100},deviceScaleFactor:1});
-  const page = await context.newPage(), errors = [];
-  page.on('pageerror', error => errors.push(error.message));
-  const state = async () => (await page.request.get(url + '/api/v1/lights/bedroom')).json();
-  const until = async (predicate, timeout = 10000) => {
-    const deadline = Date.now() + timeout;
-    while (Date.now() < deadline) { if (await predicate()) return; await page.waitForTimeout(100); }
-    throw new Error('Condition not met before deadline');
-  };
-  try {
-    await page.goto(url);
-    await page.getByText('演示在线', {exact:true}).waitFor();
-    await page.screenshot({path:path.join(artifacts,'desktop.png'),fullPage:true});
-    await page.getByRole('switch').click();
-    await until(async () => !(await state()).state.power);
-    await page.waitForTimeout(500);
-    await page.locator('#temperature').evaluate(input => { input.value = '3200'; input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); });
-    await until(async () => (await state()).pending_settings.color_temperature_kelvin === 3200);
-    assert.equal((await state()).state.power,false);
-    await page.getByRole('switch').click();
-    await until(async () => (await state()).state.power && (await state()).state.color_temperature_kelvin === 3200);
-    await until(async () => await page.getByRole('button',{name:'应用阅读场景'}).isEnabled());
-    await page.getByRole('button',{name:'应用阅读场景'}).click();
-    await until(async () => (await state()).state.color_temperature_kelvin === 5000 && (await state()).state.brightness_percent === 90);
-    await page.getByRole('button',{name:'保存当前灯光'}).click();
-    await page.locator('#scene-name').fill('晨间测试');
-    await page.locator('#scene-kelvin').fill('4200');
-    await page.locator('#scene-brightness').fill('65');
-    await page.getByRole('button',{name:'保存场景',exact:true}).click();
-    await page.getByRole('button',{name:'应用晨间测试场景'}).waitFor();
-    await page.getByRole('button',{name:'编辑晨间测试场景'}).click();
-    await page.locator('#scene-name').fill('晨间测试已编辑');
-    await page.getByRole('button',{name:'保存场景',exact:true}).click();
-    await page.getByRole('button',{name:'编辑晨间测试已编辑场景'}).click();
-    page.once('dialog', dialog => dialog.accept());
-    await page.getByRole('button',{name:'删除场景',exact:true}).click();
-    await until(async () => await page.getByRole('button',{name:'应用晨间测试已编辑场景'}).count() === 0);
-    await page.getByRole('button',{name:'15 分钟',exact:true}).click();
-    await page.getByRole('button',{name:'取消倒计时',exact:true}).waitFor();
-    await page.getByRole('button',{name:'取消倒计时',exact:true}).click();
-    await until(async () => (await state()).timer.status === 'cancelled');
-    await context.setOffline(true);
-    await page.getByText('服务连接中断。请检查运行服务的设备，页面会自动重连。').waitFor({timeout:18000});
-    assert.equal(await page.getByRole('switch').isDisabled(),true);
-    await context.setOffline(false);
-    await page.getByText('演示在线',{exact:true}).waitFor({timeout:18000});
-    await page.getByRole('button',{name:'设置与记录'}).click();
-    await page.getByRole('heading',{name:'最近操作',exact:true}).waitFor();
-    const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('button',{name:'导出配置备份'}).click();
-    const download = await downloadPromise;
-    await download.saveAs(path.join(artifacts,'test-backup.json'));
-    const backup = JSON.parse(fs.readFileSync(path.join(artifacts,'test-backup.json'),'utf8'));
-    assert.equal(backup.config.mode,'demo');
-    assert.equal(JSON.stringify(backup).includes('access-token'),false);
-    await page.getByRole('button',{name:'关闭设置'}).click();
-    await page.getByRole('button',{name:'自定义',exact:true}).click();
-    await page.locator('#timer-minutes').fill('1');
-    await page.getByRole('button',{name:'开始倒计时',exact:true}).click();
-    await until(async () => (await state()).timer.status === 'active');
-    console.log('Interactions passed; verifying actual 60-second countdown…');
-    for (const width of [390, 320, 768]) {
-      await page.setViewportSize({width,height:844});
-      await page.waitForTimeout(100);
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false, `Overflow at ${width}px`);
-      if (width === 390) await page.screenshot({path:path.join(artifacts,'mobile.png'),fullPage:true});
+  const server = http.createServer((req, res) => {
+    const name = new URL(req.url, 'http://localhost').pathname.replace(/^\/static\//, '/');
+    const file = path.resolve(staticRoot, '.' + (name === '/' ? '/index.html' : name));
+    if (!file.startsWith(staticRoot + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+      res.writeHead(404); res.end(); return;
     }
-    await until(async () => (await state()).timer.status === 'completed',75000);
-    assert.equal((await state()).state.power,false,'Countdown must really turn the demo lamp off');
-    await page.setViewportSize({width:1440,height:1100});
-    await page.getByRole('button',{name:'应用日常场景'}).click();
-    await until(async () => (await state()).state.power && (await state()).state.color_temperature_kelvin === 4000);
-    await page.waitForTimeout(3500);
-    await page.screenshot({path:path.join(artifacts,'desktop.png'),fullPage:true});
+    res.writeHead(200, {'Content-Type': mime[path.extname(file)] || 'application/octet-stream'});
+    fs.createReadStream(file).pipe(res);
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const browser = await chromium.launch({channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome'});
+  try {
+    const context = await browser.newContext({viewport:{width:390,height:844}});
+    const page = await context.newPage(), errors = [], writes = [];
+    let authenticated = false;
+    const light = {id:'bedroom',name:'测试灯具',host:'127.0.0.1',online:true,
+      state:{power:true,brightness_percent:70,color_temperature_kelvin:4000},
+      pending_settings:{},capabilities:{min_kelvin:3000,max_kelvin:5700},last_seen:new Date().toISOString(),timer:null};
+    page.on('pageerror', error => errors.push(error.message));
+    await page.route('**/api/v1/**', route => {
+      const request = route.request(), url = new URL(request.url());
+      if (url.pathname === '/api/v1/session' && request.method() === 'GET') return route.fulfill({json:{authenticated}});
+      if (url.pathname === '/api/v1/session' && request.method() === 'DELETE') {
+        authenticated = false; return route.fulfill({json:{authenticated:false}});
+      }
+      if (request.method() !== 'GET') { writes.push(request.method() + ' ' + url.pathname); return route.abort(); }
+      if (!authenticated) return route.fulfill({status:401,json:{detail:'请通过 Pocket ID 登录'}});
+      if (url.pathname === '/api/v1/status') return route.fulfill({json:{name:'一室光',server_time:Date.now()/1000,lights:[light]}});
+      if (['/api/v1/scenes','/api/v1/events'].includes(url.pathname)) return route.fulfill({json:[]});
+      return route.fulfill({status:404,json:{detail:'Test API fixture missing'}});
+    });
+    const base = 'http://127.0.0.1:' + server.address().port;
+    await page.goto(base);
+    await page.locator('#login-dialog[open]').waitFor();
+    assert.equal(await page.locator('#pocket-login').getAttribute('href'), '/auth/login');
+    assert(await page.locator('#pocket-login').isVisible());
+    assert.equal(await page.locator('input[type=password], #login-form').count(), 0);
+    assert.match(await page.locator('#login-description').textContent(), /通行密钥/);
+    fs.mkdirSync(artifacts,{recursive:true});
+    await page.screenshot({path:path.join(artifacts,'pocket-login.png')});
+    authenticated = true;
+    await page.reload();
+    await page.locator('#power-button:not([disabled])').waitFor();
+    assert(!(await page.locator('#login-dialog').isVisible()));
+    assert.equal(await page.locator('#device-status span').textContent(), '设备在线');
+    for (const width of [320,390,768,1440]) {
+      await page.setViewportSize({width,height:1000});
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      assert(await page.locator('#temperature').evaluate(el => el.getBoundingClientRect().height >= 44));
+    }
+    await page.locator('#settings-button').click();
+    await page.waitForTimeout(600);
+    await page.evaluate(() => {const d=document.querySelector('#settings-dialog');LightMotion.close(d);setTimeout(()=>LightMotion.open(d),70)});
+    await page.waitForTimeout(700);
+    assert(await page.locator('#settings-dialog').evaluate(el => el.open));
+    await page.keyboard.press('Escape'); await page.waitForTimeout(650);
+    assert(!(await page.locator('#settings-dialog').evaluate(el => el.open)));
     await page.setViewportSize({width:390,height:844});
-    await page.screenshot({path:path.join(artifacts,'mobile.png'),fullPage:true});
-    assert.deepEqual(errors,[],'No JavaScript errors');
-    console.log('Browser checks passed: controls, staging, scenes CRUD, timer expiry/cancel, reconnect, backup, responsive 320/390/768/1440, no JS errors.');
-  } finally { await browser.close(); }
-})().catch(error => { console.error(error); process.exit(1); });
+    await page.locator('#settings-button').click(); await page.waitForTimeout(600);
+    const header = await page.locator('#settings-dialog .dialog-heading').boundingBox();
+    await page.mouse.move(header.x+90,header.y+22); await page.mouse.down();
+    await page.mouse.move(header.x+90,header.y+230,{steps:12}); await page.mouse.up(); await page.waitForTimeout(700);
+    assert(!(await page.locator('#settings-dialog').evaluate(el => el.open)));
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await page.locator('#settings-button').click();
+    assert.equal(await page.locator('#settings-dialog').evaluate(el => el.style.transform),'none');
+    assert(await page.locator('#logout-button').isVisible());
+    await page.locator('#logout-button').click();
+    await page.locator('#login-dialog[open]').waitFor();
+    authenticated = true; await page.reload();
+    await page.locator('#power-button:not([disabled])').waitFor();
+    authenticated = false;
+    await page.locator('#login-dialog[open]').waitFor({timeout:6000});
+    assert(await page.locator('#power-button').isDisabled());
+    assert.deepEqual(writes, []);
+    assert.deepEqual(errors, []);
+    console.log('PASS: Pocket ID login-only UI, logout, expired session, layouts, interruptible dialogs, swipe, reduced motion; no device requests');
+  } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
+})().catch(error => {console.error(error);process.exitCode=1});

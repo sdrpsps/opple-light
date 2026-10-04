@@ -98,25 +98,3 @@ class OppleDriver:
                 raise
             self.close()
             raise DeviceUnavailable("灯具控制失败，请刷新状态后重试") from exc
-
-
-class DemoDriver:
-    """Isolated simulator. Never constructs a socket or touches a real device."""
-    def __init__(self, config):
-        self.state = Reading(True, config.default_brightness, config.default_kelvin)
-        self.online = True
-
-    def read(self):
-        if not self.online:
-            raise DeviceUnavailable("演示灯具离线")
-        return Reading(**vars(self.state))
-
-    def write(self, target):
-        self.read()
-        time.sleep(0.05)
-        for key, value in target.items():
-            setattr(self.state, key, value)
-        return self.read()
-
-    def close(self):
-        pass

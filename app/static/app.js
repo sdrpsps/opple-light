@@ -1,7 +1,6 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let snapshot = null, scenes = [], selectedId = localStorage.getItem('opple-light') || 'bedroom';
-let authRequired = true, authMode = "token";
 let authenticated = false, connectionLost = false, editingScene = null, serverOffset = 0;
 let pendingTarget = null, sending = false, toastTimeout = null, updatePromise = null;
 let pointerRange = null, lastTimerStatus = null, sceneSignature = null;
@@ -19,10 +18,6 @@ function notify(message, error = false) {
 }
 function showLogin() {
   authenticated = false;
-  const pocket = authMode === 'pocketid';
-  $('login-form').hidden = pocket; $('pocket-login').hidden = !pocket;
-  $('login-description').textContent = pocket ? '使用你的通行密钥登录，继续控制灯光。' : '输入服务的访问口令，开始控制灯光。';
-  document.querySelector('.login-help').textContent = pocket ? '登录由 Pocket ID 提供。' : '首次使用：在部署说明中查看口令获取方法。';
   for (const dialog of document.querySelectorAll('dialog[open]')) LightMotion.close(dialog);
   if (!$('login-dialog').open) LightMotion.open($('login-dialog'));
 }
@@ -68,10 +63,8 @@ function render() {
   $('light-name').textContent = light.name;
   document.title = `一室光 · ${light.name}`;
   $('device-status').className = `status-pill ${available ? 'online' : 'offline'}`;
-  $('device-status').querySelector('span').textContent = available ? (snapshot.mode === 'demo' ? '演示在线' : '设备在线') : '设备离线';
-  $('mode-badge').classList.toggle('demo', snapshot.mode === 'demo');
-  $('mode-badge').textContent = snapshot.mode === 'demo' ? '演示模式 · 不连接真实灯具' : '局域网直连';
-  $('footer-mode').lastChild.textContent = snapshot.mode === 'demo' ? '演示环境，所有操作仅作用于模拟灯具。' : '本地控制，灯光就在你手中。';
+  $('device-status').querySelector('span').textContent = available ? '设备在线' : '设备离线';
+  $('connection-label').textContent = '局域网直连';
   $('connection-warning').hidden = available;
   $('connection-warning').textContent = connectionLost ? '服务连接中断。请检查运行服务的设备，页面会自动重连。' : (light.error || '正在连接灯具。请确认灯具有电，且服务能够访问灯具所在的局域网。');
   $('power-button').disabled = !available || sending;
@@ -209,9 +202,9 @@ async function setTimer(minutes) {
 async function openSettings() {
   const light = currentLight(); $('device-details').replaceChildren();
   const name = document.createElement('strong'); name.textContent = light?.name || '灯具';
-  const details = document.createElement('div'); details.textContent = snapshot?.mode === 'demo' ? '演示模式：模拟设备，操作不会影响真实灯具。' : `设备地址：${light?.host} · 色温范围：${light?.capabilities.min_kelvin}–${light?.capabilities.max_kelvin} K`;
+  const details = document.createElement('div'); details.textContent = `设备地址：${light?.host} · 色温范围：${light?.capabilities.min_kelvin}–${light?.capabilities.max_kelvin} K`;
   const note = document.createElement('div'); note.textContent = '配置、场景和倒计时保存在服务的数据目录。'; $('device-details').append(name, details, note);
-  $('logout-button').hidden = !authRequired; LightMotion.open($('settings-dialog'));
+  LightMotion.open($('settings-dialog'));
   try {
     const events = await api('/events'); $('event-list').replaceChildren();
     if (!events.length) { const p = document.createElement('p'); p.textContent = '暂无操作记录。'; $('event-list').append(p); }
@@ -263,18 +256,13 @@ $('cancel-timer').addEventListener('click', async () => { try { await api(`/ligh
 $('settings-button').addEventListener('click', openSettings); $('history-button').addEventListener('click', openSettings);
 for (const button of document.querySelectorAll('[data-close]')) button.addEventListener('click', () => LightMotion.close($(button.dataset.close)));
 $('login-dialog').addEventListener('cancel', event => event.preventDefault());
-$('login-form').addEventListener('submit', async event => {
-  event.preventDefault(); event.submitter.disabled = true; $('login-error').textContent = '';
-  try { await api('/session', {method:'POST',body:JSON.stringify({token:$('login-token').value.trim()})}); $('login-token').value = ''; LightMotion.close($('login-dialog')); authenticated = true; scenes = await api('/scenes'); await update(); }
-  catch (error) { $('login-error').textContent = error.message; } finally { event.submitter.disabled = false; }
-});
 $('logout-button').addEventListener('click', async () => { try { await api('/session', {method:'DELETE'}); showLogin(); } catch (error) { notify(error.message, true); } });
 $('backup-button').addEventListener('click', async () => {
   try { const blob = await api('/backup', {blob:true}); const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'opple-backup.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url),1000); notify('配置备份已导出'); } catch (error) { notify(error.message,true); }
 });
 async function boot() {
   try {
-    const session = await api('/session'); authenticated = session.authenticated; authRequired = session.auth_required !== false; authMode = session.auth_mode || "token";
+    const session = await api('/session'); authenticated = session.authenticated;
     if (!authenticated) { showLogin(); return; }
     scenes = await api('/scenes'); await update();
   } catch (error) { $('connection-warning').hidden = false; $('connection-warning').textContent = error.message; setTimeout(boot, 5000); }

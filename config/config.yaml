@@ -1,5 +1,4 @@
 name: 一室光
-mode: real
 poll_interval_seconds: 10
 command_ttl_seconds: 20
 timezone: Asia/Shanghai
@@ -9,5 +8,3 @@ lights:
     host: 192.168.111.6
     min_kelvin: 3000
     max_kelvin: 5700
-    default_kelvin: 4000
-    default_brightness: 70

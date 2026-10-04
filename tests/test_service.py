@@ -2,16 +2,17 @@ import asyncio
 import time
 from pathlib import Path
 from app.config import Settings, LightConfig
-from app.driver import DemoDriver, DeviceUnavailable
+from app.driver import DeviceUnavailable
+from tests.support import FakeDriver
 from app.service import LightController, LightService
 from app.storage import Storage
 
 
 def settings():
-    return Settings(mode="demo", lights=[LightConfig(id="bedroom", name="房间吸顶灯", host="192.168.111.6")])
+    return Settings(lights=[LightConfig(id="bedroom", name="房间吸顶灯", host="192.168.111.6")])
 
 
-class RecordingDriver(DemoDriver):
+class RecordingDriver(FakeDriver):
     def __init__(self, config):
         super().__init__(config)
         self.writes = []
@@ -177,7 +178,7 @@ def test_restart_preserves_settings_scenes_and_timer_but_not_commands(tmp_path):
 
 
 def test_partial_write_failure_keeps_observed_state(tmp_path):
-    class PartialDriver(DemoDriver):
+    class PartialDriver(FakeDriver):
         def write(self, target):
             self.state.power = True
             raise DeviceUnavailable("色温设置未确认")
