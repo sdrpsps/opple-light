@@ -24,9 +24,8 @@ const { loginRequired } = useLightSession();
         class="inline-flex min-h-12 items-center justify-center rounded-xl bg-[#b58c51] px-4 py-3 text-center text-sm font-medium text-white hover:bg-[#a67b3f] mt-1 w-full"
         href="/auth/login"
       >
-        通过 Pocket ID 登录
+        使用通行密钥登录
       </a>
-      <p class="text-xs text-muted">登录由 Pocket ID 提供。</p>
     </div>
   </AppDialog>
 </template>
